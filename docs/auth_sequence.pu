@@ -1,0 +1,21 @@
+@startuml
+title Email MFA Sequence
+Client -> Cognito: <b>InitiateAuth</b>\n  - AuthFlow: CustomFlow\n  - ChallengeName: SRP_A
+Cognito -> Lambda: <b>DefineAuthChallenge</b>\n  - ChallengeName: SRP_A\n  - ChallengeResult: True
+Cognito <- Lambda: Next ChallengeName: PASSWORD_VERIFIER
+Client <- Cognito: Next ChallengeName: PASSWORD_VERIFIER
+Client -> Cognito: <b>RespondToAuthChallenge</b>\n  - ChallengeName: PASSWORD_VERIFIER\n  - <Encrypted Password>
+Cognito -> Cognito: Verify Password
+Cognito -> Lambda: <b>DefineAuthChallenge</b>\n  - ChallengeName: PASSWORD_VERIFIER\n  - ChallengeResult: True
+Cognito <- Lambda: Next ChallengeName: CUSTOM_CHALLENGE
+Cognito -> Lambda: <b>CreateAuthChallenge</b>\n  - ChallengeName: CUSTOM_CHALLENGE
+Lambda -> SES: Send Email\n  - <MFA Code>
+Cognito <- Lambda: PrivateChallengeParameters\n  - <MFA Code>
+Client <- Cognito: Next ChallengeName:CUSTOM_CHALLENGE
+Client -> Cognito: <b>RespondToAuthChallenge</b>\n  - ChallengeName: CUSTOM_CHALLENGE\n  - ChallengeResponses: <MFA Code from Client>
+Cognito -> Lambda: <b>VerifyAuthChallengeResponse</b>\n  - ChallengeAnswer: <MFA Code from Client>\n  - PrivateChallengeParameters: <MFA Code>
+Cognito <- Lambda: Verification Result
+Cognito -> Lambda: <b>DefineAuthChallenge</b>\n  - ChallengeName: CUSTOM_CHALLENGE\n  - ChallengeResult: True
+Cognito <- Lambda: IssueTokens: True
+Client <- Cognito: IdToken\nAccessToken\nRefreshToken
+@enduml

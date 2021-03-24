@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Custom Authentication with Email MFA
+
+Parameters:
+  SenderEmailAddress: 
+    Type: String
+    Default: sender@example.com
+    Description: MFA 確認コードの送信を行う送信元 (FROM) のメールアドレスを指定します。
+
+Globals:
+  Function:
+    Timeout: 10
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UsernameAttributes:
+        - email
+      Schema: 
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      ExplicitAuthFlows:
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  EmailMFAFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/triggers/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          SENDER_EMAIL_ADDRESS: !Ref SenderEmailAddress
+      Policies:
+        - SESCrudPolicy:
+            IdentityName: "*"
+      Events:
+        CognitoTrigger:
+          Type: Cognito
+          Properties:
+            Trigger:
+              - CreateAuthChallenge
+              - DefineAuthChallenge
+              - VerifyAuthChallengeResponse
+            UserPool: !Ref UserPool
+
+Outputs:
+  CognitoUserPoolId:
+    Description: "Cognito UserPool ID"
+    Value: !Ref UserPool
+  CognitoUserPoolClientId:
+    Description: "Cognito UserPool Client ID"
+    Value: !Ref UserPoolClient
